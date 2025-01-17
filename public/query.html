@@ -54,6 +54,7 @@
       let selectedCategory = "health"; // Default category
       let markers = []; // Array to keep track of markers
       let allResults = []; // Array to store all results across pages
+      let isLoading = false; // To track if the results are still loading
 
       // Fetch API key from the backend server
       fetch('/api-key')
@@ -139,6 +140,10 @@
         markers = []; // Reset markers array
         allResults = []; // Reset all results array
 
+        // Stop if already loading
+        if (isLoading) return;
+        isLoading = true;
+
         // Define the request parameters based on selected category
         const request = {
           location: map.getCenter(),
@@ -146,15 +151,23 @@
           type: selectedCategory, // Use the selected business category
         };
 
+        // Function to handle the next page of results
+        function getNextPage(pagination) {
+          if (pagination.hasNextPage) {
+            pagination.nextPage();
+          }
+        }
+
         // Perform a nearby search with PlacesService
         service.nearbySearch(request, (results, status, pagination) => {
           if (status === google.maps.places.PlacesServiceStatus.OK) {
             // Store results across multiple pages
             allResults = allResults.concat(results);
 
-            // Check if there are more results to fetch
-            if (pagination.hasNextPage) {
-              pagination.nextPage(); // Fetch the next page of results
+            // Check if there are more pages of results
+            if (pagination && pagination.hasNextPage) {
+              // Request the next page of results
+              setTimeout(() => getNextPage(pagination), 200);
             } else {
               // Once all pages are fetched, process the results
               const businessCount = allResults.length;
@@ -177,10 +190,14 @@
                 // Save marker to the array for future clearing
                 markers.push(marker);
               });
+
+              // Set loading flag to false when done
+              isLoading = false;
             }
           } else {
             console.error("PlacesService was not successful due to: " + status);
             document.getElementById("business-count").textContent = "No businesses found.";
+            isLoading = false;
           }
         });
       }

@@ -1,8 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Google Places API Example</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Business Query in Venice</title>
+    <style>
+      #map {
+        height: 500px;
+        width: 100%;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        width: 300px;
+        margin: 20px;
+      }
+      select {
+        margin: 10px 0;
+        padding: 5px;
+        font-size: 16px;
+      }
+      #business-count {
+        font-size: 18px;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Search for Businesses in Venice</h3>
+
+    <div class="container">
+      <label for="business-type">Select Essential or Tourism Business Type:</label>
+      <select id="business-type">
+        <option value="essential">Essential Businesses</option>
+        <option value="tourism">Tourism Businesses</option>
+      </select>
+
+      <label for="category">Select Business Category:</label>
+      <select id="category">
+        <!-- Placeholder for dynamic categories -->
+      </select>
+
+      <div id="business-count">Total Businesses Found: 0</div>
+    </div>
+
+    <div id="map"></div>
+
     <script>
+      let map;
+      let service;
+      let infowindow;
+      let businessType = "essential"; // Default to essential
+      let selectedCategory = "health"; // Default category
+      let markers = []; // Array to keep track of markers
+      let allResults = []; // Array to store all results across pages
+
       // Fetch API key from the backend server
       fetch('/api-key')
         .then(response => response.json())
@@ -22,39 +74,116 @@
         .catch(error => console.error('Error fetching API key:', error));
 
       function initMap() {
+        // Define the coordinates for the center of the city (Venice)
         const cityCenter = { lat: 45.4343363, lng: 12.3387844 };
-        const map = new google.maps.Map(document.getElementById('map'), {
+
+        // Create the map
+        map = new google.maps.Map(document.getElementById("map"), {
           center: cityCenter,
           zoom: 13,
         });
 
-        const service = new google.maps.places.PlacesService(map);
+        // Create a PlacesService instance
+        service = new google.maps.places.PlacesService(map);
+        infowindow = new google.maps.InfoWindow();
 
+        // Add event listeners to dropdowns
+        document.getElementById("business-type").addEventListener("change", updateBusinessType);
+        document.getElementById("category").addEventListener("change", updateCategory);
+
+        // Initialize the categories
+        updateCategories();
+      }
+
+      function updateBusinessType() {
+        businessType = document.getElementById("business-type").value;
+        updateCategories(); // Refresh categories based on selected business type
+      }
+
+      function updateCategories() {
+        const categorySelect = document.getElementById("category");
+        categorySelect.innerHTML = ""; // Clear current options
+
+        let categories = [];
+
+        if (businessType === "essential") {
+          categories = ["health", "grocery", "pharmacy"];
+        } else if (businessType === "tourism") {
+          categories = ["restaurant", "hotel", "museum"];
+        }
+
+        // Add options to category dropdown
+        categories.forEach((category) => {
+          const option = document.createElement("option");
+          option.value = category;
+          option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+          categorySelect.appendChild(option);
+        });
+
+        // Automatically update the map based on the default selection
+        selectedCategory = categories[0];
+        searchBusinesses();
+      }
+
+      function updateCategory() {
+        selectedCategory = document.getElementById("category").value;
+        searchBusinesses(); // Update map and count on category change
+      }
+
+      function searchBusinesses() {
+        // Set the business count to "Loading..." while fetching data
+        document.getElementById("business-count").textContent = "Loading...";
+
+        // Clear existing markers from the map
+        markers.forEach(marker => marker.setMap(null));
+        markers = []; // Reset markers array
+        allResults = []; // Reset all results array
+
+        // Define the request parameters based on selected category
         const request = {
-          location: cityCenter,
-          radius: '5000',
-          type: 'school',
+          location: map.getCenter(),
+          radius: "5000", // Search within a 5 km radius
+          type: selectedCategory, // Use the selected business category
         };
 
-        service.nearbySearch(request, (results, status) => {
+        // Perform a nearby search with PlacesService
+        service.nearbySearch(request, (results, status, pagination) => {
           if (status === google.maps.places.PlacesServiceStatus.OK) {
-            for (let i = 0; i < results.length; i++) {
-              const place = results[i];
-              new google.maps.Marker({
-                map,
-                position: place.geometry.location,
-                title: place.name,
+            // Store results across multiple pages
+            allResults = allResults.concat(results);
+
+            // Check if there are more results to fetch
+            if (pagination.hasNextPage) {
+              pagination.nextPage(); // Fetch the next page of results
+            } else {
+              // Once all pages are fetched, process the results
+              const businessCount = allResults.length;
+              document.getElementById("business-count").textContent = `Total Businesses Found: ${businessCount}`;
+
+              // Add markers for all results
+              allResults.forEach((place) => {
+                const marker = new google.maps.Marker({
+                  map: map,
+                  position: place.geometry.location,
+                  title: place.name,
+                });
+
+                // Add info window on marker click
+                google.maps.event.addListener(marker, "click", function () {
+                  infowindow.setContent(`<strong>${place.name}</strong><br>${place.vicinity}`);
+                  infowindow.open(map, this);
+                });
+
+                // Save marker to the array for future clearing
+                markers.push(marker);
               });
             }
           } else {
-            console.error('PlacesService was not successful due to: ' + status);
+            console.error("PlacesService was not successful due to: " + status);
+            document.getElementById("business-count").textContent = "No businesses found.";
           }
         });
       }
     </script>
-  </head>
-  <body>
-    <h3>Businesses of Type 'School' in Venice, Italy</h3>
-    <div id="map" style="height: 500px; width: 100%;"></div>
   </body>
 </html>

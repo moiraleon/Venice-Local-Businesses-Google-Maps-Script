@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Google Places API Example</title>
+    <script>
+      // Fetch API key from the backend server
+      fetch('/api-key')
+        .then(response => response.json())
+        .then(data => {
+          const apiKey = data.apiKey;
+
+          // Use the fetched API key in the Google Maps script
+          const script = document.createElement('script');
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+          script.async = true;
+          document.head.appendChild(script);
+
+          script.onload = function() {
+            initMap();
+          };
+        })
+        .catch(error => console.error('Error fetching API key:', error));
+
+      function initMap() {
+        const cityCenter = { lat: 45.4343363, lng: 12.3387844 };
+        const map = new google.maps.Map(document.getElementById('map'), {
+          center: cityCenter,
+          zoom: 13,
+        });
+
+        const service = new google.maps.places.PlacesService(map);
+
+        const request = {
+          location: cityCenter,
+          radius: '5000',
+          type: 'school',
+        };
+
+        service.nearbySearch(request, (results, status) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK) {
+            for (let i = 0; i < results.length; i++) {
+              const place = results[i];
+              new google.maps.Marker({
+                map,
+                position: place.geometry.location,
+                title: place.name,
+              });
+            }
+          } else {
+            console.error('PlacesService was not successful due to: ' + status);
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <h3>Businesses of Type 'School' in Venice, Italy</h3>
+    <div id="map" style="height: 500px; width: 100%;"></div>
+  </body>
+</html>
